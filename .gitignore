@@ -1,0 +1,10 @@
+out
+node_modules
+.vscode-test
+*.vsix
+.DS_Store
+.vscode
+!/.vscode/launch.json
+!/.vscode/tasks.json
+coverage
+.nyc_output
