@@ -26,13 +26,11 @@ export class SkillTreeProvider implements vscode.TreeDataProvider<SkillTreeItem>
                 ]);
             } else if (element.contextValue === 'category') {
                 return this.getSkills(element.scope!, element.type!);
-            } else if (element.contextValue === 'item' && element.skillItem) {
-                // If it's a directory, return its contents
-                if (fs.statSync(element.skillItem.path).isDirectory()) {
+            } else if (element.skillItem) {
+                // Handle any item that has a skillItem (skills, agents, subdirectories)
+                if (fs.existsSync(element.skillItem.path) && fs.statSync(element.skillItem.path).isDirectory()) {
                     return this.getDirectoryContents(element.skillItem.path, element.scope!, element.type!);
                 }
-            } else if (element.contextValue === 'file') {
-                // Files don't have children
                 return Promise.resolve([]);
             }
             return Promise.resolve([]);
@@ -54,7 +52,7 @@ export class SkillTreeProvider implements vscode.TreeDataProvider<SkillTreeItem>
                 return new SkillTreeItem(
                     s.name,
                     isDir ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None,
-                    'item',
+                    `${s.scope}-${s.type}`, // 'global-skill', 'project-skill', etc.
                     s.scope,
                     s.type,
                     s
@@ -73,10 +71,10 @@ export class SkillTreeProvider implements vscode.TreeDataProvider<SkillTreeItem>
             return new SkillTreeItem(
                 file,
                 isDir ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None,
-                isDir ? 'directory' : 'file', // Use 'directory' for subdirs if we want to support deeper nesting, or just 'file' for now
+                isDir ? 'directory' : 'file',
                 scope,
                 type,
-                { name: file, path: filePath, type: type, scope: scope } // Mock SkillItem for file
+                { name: file, path: filePath, type: type, scope: scope }
             );
         }).filter(item => item !== null) as SkillTreeItem[];
 
@@ -96,7 +94,8 @@ export class SkillTreeItem extends vscode.TreeItem {
         super(label, collapsibleState);
         this.tooltip = this.label;
 
-        if (contextValue === 'item') {
+        // Check if it's a skill/agent item based on contextValue or skillItem presence
+        if (contextValue.includes('skill') || contextValue.includes('agent')) {
             // this.description = type; // Removed as per user request
             const isDir = skillItem && fs.existsSync(skillItem.path) && fs.statSync(skillItem.path).isDirectory();
 

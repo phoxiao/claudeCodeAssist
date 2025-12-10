@@ -1,11 +1,13 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import { GitHubService, MarketplaceSkill } from './GitHubService';
 
 export class MarketplacePanel {
     public static currentPanel: MarketplacePanel | undefined;
     private readonly _panel: vscode.WebviewPanel;
     private readonly _extensionUri: vscode.Uri;
     private _disposables: vscode.Disposable[] = [];
+    private _githubService: GitHubService;
 
     public static createOrShow(extensionUri: vscode.Uri) {
         const column = vscode.window.activeTextEditor
@@ -33,6 +35,7 @@ export class MarketplacePanel {
     private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri) {
         this._panel = panel;
         this._extensionUri = extensionUri;
+        this._githubService = new GitHubService();
 
         this._update();
 
@@ -62,24 +65,29 @@ export class MarketplacePanel {
         }
     }
 
-    private _update() {
+    private async _update() {
         const webview = this._panel.webview;
-        this._panel.webview.html = this._getHtmlForWebview(webview);
+        this._panel.webview.html = this._getLoadingHtml();
+
+        const skills = await this._githubService.fetchSkills();
+        this._panel.webview.html = this._getHtmlForWebview(webview, skills);
     }
 
-    private _getHtmlForWebview(webview: vscode.Webview) {
-        // Mock data
-        const skills = [
-            { name: 'Python Expert', description: 'Expert in Python coding', type: 'agent', content: 'You are a Python expert...' },
-            { name: 'React Guru', description: 'Expert in React', type: 'skill', content: 'You are a React expert...' },
-            { name: 'Unit Tester', description: 'Generates unit tests', type: 'skill', content: 'You are a Unit Test generator...' }
-        ];
+    private _getLoadingHtml() {
+        return `<!DOCTYPE html>
+        <html lang="en">
+        <body>
+            <h1>Loading Marketplace...</h1>
+        </body>
+        </html>`;
+    }
 
+    private _getHtmlForWebview(webview: vscode.Webview, skills: MarketplaceSkill[]) {
         const skillsHtml = skills.map(skill => `
             <div class="skill-card">
                 <h3>${skill.name} <span class="tag ${skill.type}">${skill.type}</span></h3>
                 <p>${skill.description}</p>
-                <button onclick="download('${skill.name}', '${skill.type}', '${skill.content.replace(/'/g, "\\'")}')">Download</button>
+                <button onclick="download('${skill.name}', '${skill.type}', '${skill.url}')">Download</button>
             </div>
         `).join('');
 
@@ -101,15 +109,16 @@ export class MarketplacePanel {
         </head>
         <body>
             <h1>Claude Skills Marketplace</h1>
+            <p>Source: ComposioHQ/awesome-claude-skills</p>
             <div id="skills-list">
                 ${skillsHtml}
             </div>
             <script>
                 const vscode = acquireVsCodeApi();
-                function download(name, type, content) {
+                function download(name, type, url) {
                     vscode.postMessage({
                         command: 'download',
-                        skill: { name, type, content }
+                        skill: { name, type, url }
                     });
                 }
             </script>

@@ -21,15 +21,18 @@
       },
       {
         "command": "claude-code-assist.moveToGlobal",
-        "title": "Move to Global"
+        "title": "Move to Global",
+        "icon": "$(arrow-up)"
       },
       {
         "command": "claude-code-assist.deleteSkill",
-        "title": "Delete Skill"
+        "title": "Delete Skill",
+        "icon": "$(trash)"
       },
       {
         "command": "claude-code-assist.openMarketplace",
-        "title": "Open Marketplace"
+        "title": "Open Marketplace",
+        "icon": "$(cloud-download)"
       },
       {
         "command": "claude-code-assist.checkConflicts",
@@ -50,6 +53,27 @@
         {
           "id": "claudeSkills",
           "name": "Skills & Agents"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "claude-code-assist.openMarketplace",
+          "when": "view == claudeSkills",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "claude-code-assist.deleteSkill",
+          "when": "view == claudeSkills",
+          "group": "inline"
+        },
+        {
+          "command": "claude-code-assist.moveToGlobal",
+          "when": "view == claudeSkills && viewItem =~ /project-.*/",
+          "group": "inline"
         }
       ]
     },

@@ -205,25 +205,75 @@ export class SkillManager {
         }
     }
 
-    public async moveToGlobal(item: SkillItem): Promise<void> {
-        if (item.scope === 'global') {
-            return;
+    public async moveToGlobal(skill: SkillItem): Promise<void> {
+        if (skill.scope === 'global') { return; }
+
+        const globalRoot = this.getGlobalPath();
+        const globalPath = path.join(globalRoot, skill.type === 'skill' ? 'skills' : 'agents');
+
+        if (!fs.existsSync(globalPath)) {
+            fs.mkdirSync(globalPath, { recursive: true });
         }
-        const globalPath = this.getGlobalPath();
-        // Determine target subfolder
-        let targetDir = globalPath;
-        if (item.type === 'agent') {
-            targetDir = path.join(globalPath, 'agents');
+
+        const baseName = path.basename(skill.path);
+        const finalDestPath = path.join(globalPath, baseName);
+
+        if (fs.existsSync(finalDestPath)) {
+            throw new Error('Skill already exists in global scope');
+        }
+
+        fs.renameSync(skill.path, finalDestPath);
+    }
+
+    async copyToGlobal(skill: SkillItem): Promise<void> {
+        if (skill.scope === 'global') { return; }
+
+        const globalRoot = this.getGlobalPath();
+        const globalPath = path.join(globalRoot, skill.type === 'skill' ? 'skills' : 'agents');
+
+        if (!fs.existsSync(globalPath)) {
+            fs.mkdirSync(globalPath, { recursive: true });
+        }
+
+        const baseName = path.basename(skill.path);
+        const finalDestPath = path.join(globalPath, baseName);
+
+        if (fs.existsSync(finalDestPath)) {
+            throw new Error('Skill already exists in global scope');
+        }
+
+        // Copy file or directory
+        if (fs.statSync(skill.path).isDirectory()) {
+            // Recursive copy for directory
+            this.copyRecursiveSync(skill.path, finalDestPath);
         } else {
-            targetDir = path.join(globalPath, 'skills');
+            fs.copyFileSync(skill.path, finalDestPath);
+        }
+    }
+
+    private copyRecursiveSync(src: string, dest: string) {
+        if (fs.existsSync(dest)) {
+            const stats = fs.statSync(dest);
+            if (stats.isDirectory()) {
+                // Directory exists
+            } else {
+                // It's a file, error? Or overwrite? For now assume we shouldn't be here if check above passed
+            }
+        } else {
+            fs.mkdirSync(dest, { recursive: true });
         }
 
-        if (!fs.existsSync(targetDir)) {
-            fs.mkdirSync(targetDir, { recursive: true });
-        }
+        fs.readdirSync(src).forEach((childItemName) => {
+            const childItemPath = path.join(src, childItemName);
+            const childItemDestPath = path.join(dest, childItemName);
+            const childStats = fs.statSync(childItemPath);
 
-        const targetPath = path.join(targetDir, path.basename(item.path));
-        fs.renameSync(item.path, targetPath);
+            if (childStats.isDirectory()) {
+                this.copyRecursiveSync(childItemPath, childItemDestPath);
+            } else {
+                fs.copyFileSync(childItemPath, childItemDestPath);
+            }
+        });
     }
 
     public async saveSkill(name: string, content: string, type: 'skill' | 'agent', scope: 'global' | 'project'): Promise<void> {
