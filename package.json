@@ -37,6 +37,11 @@
       {
         "command": "claude-code-assist.checkConflicts",
         "title": "Check Conflicts"
+      },
+      {
+        "command": "claude-code-assist.deletePlugin",
+        "title": "Delete Plugin",
+        "icon": "$(trash)"
       }
     ],
     "viewsContainers": {
@@ -67,12 +72,17 @@
       "view/item/context": [
         {
           "command": "claude-code-assist.deleteSkill",
-          "when": "view == claudeSkills",
+          "when": "view == claudeSkills && viewItem =~ /^(global|project)-.*/",
           "group": "inline"
         },
         {
           "command": "claude-code-assist.moveToGlobal",
           "when": "view == claudeSkills && viewItem =~ /project-.*/",
+          "group": "inline"
+        },
+        {
+          "command": "claude-code-assist.deletePlugin",
+          "when": "view == claudeSkills && viewItem == plugin",
           "group": "inline"
         }
       ]

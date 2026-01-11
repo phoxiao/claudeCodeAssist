@@ -4,6 +4,7 @@ import * as path from 'path';
 import * as cp from 'child_process';
 import * as os from 'os';
 import { SkillManager } from './SkillManager';
+import { PluginManager } from './PluginManager';
 import { SkillTreeProvider, SkillTreeItem } from './SkillTreeProvider';
 import { MarketplacePanel } from './MarketplacePanel';
 
@@ -13,7 +14,8 @@ export function activate(context: vscode.ExtensionContext) {
     console.log('Claude Code Assist: activate');
 
     const skillManager = new SkillManager();
-    const skillTreeProvider = new SkillTreeProvider(skillManager);
+    const pluginManager = new PluginManager();
+    const skillTreeProvider = new SkillTreeProvider(skillManager, pluginManager);
 
     vscode.window.registerTreeDataProvider('claudeSkills', skillTreeProvider);
     output.appendLine('Registered tree data provider');
@@ -278,6 +280,28 @@ export function activate(context: vscode.ExtensionContext) {
         } else {
             vscode.window.showInformationMessage('No conflicts found.');
             output.appendLine('No conflicts found');
+        }
+    }));
+
+    context.subscriptions.push(vscode.commands.registerCommand('claude-code-assist.deletePlugin', async (node: SkillTreeItem) => {
+        output.appendLine('Command: deletePlugin');
+        if (node.pluginItem) {
+            const answer = await vscode.window.showWarningMessage(
+                `Are you sure you want to delete plugin "${node.pluginItem.name}" from ${node.pluginItem.marketplace}?`,
+                { modal: true },
+                'Yes', 'No'
+            );
+            if (answer === 'Yes') {
+                try {
+                    await pluginManager.deletePlugin(node.pluginItem);
+                    skillTreeProvider.refresh();
+                    vscode.window.showInformationMessage(`Deleted plugin ${node.pluginItem.name}`);
+                    output.appendLine(`Deleted plugin ${node.pluginItem.name}`);
+                } catch (error) {
+                    vscode.window.showErrorMessage(`Failed to delete plugin: ${error}`);
+                    output.appendLine(`Failed to delete plugin: ${error}`);
+                }
+            }
         }
     }));
 }
