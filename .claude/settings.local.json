@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install)",
+      "Bash(npm run compile:*)",
+      "Bash(vsce package:*)",
+      "Bash(code --install-extension:*)",
+      "Bash(code --uninstall-extension:*)"
+    ]
+  }
+}
