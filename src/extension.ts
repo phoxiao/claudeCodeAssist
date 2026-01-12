@@ -7,6 +7,12 @@ import { SkillManager } from './SkillManager';
 import { PluginManager } from './PluginManager';
 import { SkillTreeProvider, SkillTreeItem } from './SkillTreeProvider';
 import { MarketplacePanel } from './MarketplacePanel';
+import { SecurityAuditor, AuditResult } from './SecurityAuditor';
+import { AuditResultPanel } from './AuditResultPanel';
+import { SmartInstaller, ParsedUrl } from './SmartInstaller';
+import { ClipboardWatcher } from './ClipboardWatcher';
+import { UpdateChecker } from './UpdateChecker';
+import { ImportExport } from './ImportExport';
 
 export function activate(context: vscode.ExtensionContext) {
     const output = vscode.window.createOutputChannel('Claude Code Assist');
@@ -16,6 +22,34 @@ export function activate(context: vscode.ExtensionContext) {
     const skillManager = new SkillManager();
     const pluginManager = new PluginManager();
     const skillTreeProvider = new SkillTreeProvider(skillManager, pluginManager);
+    const securityAuditor = new SecurityAuditor(output);
+    const smartInstaller = new SmartInstaller(output);
+    const clipboardWatcher = new ClipboardWatcher(smartInstaller, output);
+    const updateChecker = new UpdateChecker(output);
+    const importExport = new ImportExport(output, skillManager, smartInstaller);
+
+    // Start clipboard watcher if enabled
+    const config = vscode.workspace.getConfiguration('claudeCodeAssist');
+    if (config.get<boolean>('enableClipboardWatcher', true)) {
+        clipboardWatcher.start();
+    }
+
+    // Listen for config changes
+    context.subscriptions.push(
+        vscode.workspace.onDidChangeConfiguration(e => {
+            if (e.affectsConfiguration('claudeCodeAssist.enableClipboardWatcher')) {
+                const enabled = vscode.workspace.getConfiguration('claudeCodeAssist')
+                    .get<boolean>('enableClipboardWatcher', true);
+                if (enabled) {
+                    clipboardWatcher.start();
+                } else {
+                    clipboardWatcher.stop();
+                }
+            }
+        })
+    );
+
+    context.subscriptions.push(clipboardWatcher);
 
     vscode.window.registerTreeDataProvider('claudeSkills', skillTreeProvider);
     output.appendLine('Registered tree data provider');
@@ -65,6 +99,149 @@ export function activate(context: vscode.ExtensionContext) {
         output.appendLine('Command: openMarketplace');
         MarketplacePanel.createOrShow(context.extensionUri);
     }));
+
+    // Smart Install: Install from URL command
+    context.subscriptions.push(vscode.commands.registerCommand('claude-code-assist.installFromUrl', async () => {
+        output.appendLine('Command: installFromUrl');
+
+        // Show input box for URL
+        const input = await vscode.window.showInputBox({
+            prompt: 'Enter GitHub URL or shorthand (e.g., user/repo, gist:id)',
+            placeHolder: 'https://github.com/user/repo/tree/main/skills/my-skill',
+            validateInput: (value) => {
+                if (!value.trim()) {
+                    return 'Please enter a URL';
+                }
+                if (!smartInstaller.isValidInput(value)) {
+                    return 'Invalid format. Use GitHub URL, user/repo, or gist:id';
+                }
+                return null;
+            }
+        });
+
+        if (!input) {
+            return;
+        }
+
+        await installFromInput(input);
+    }));
+
+    // Smart Install: Install from clipboard command
+    context.subscriptions.push(vscode.commands.registerCommand('claude-code-assist.installFromClipboard', async () => {
+        output.appendLine('Command: installFromClipboard');
+
+        const clipboardUrl = await clipboardWatcher.getClipboardUrl();
+        if (!clipboardUrl) {
+            vscode.window.showWarningMessage('No valid skill URL found in clipboard');
+            return;
+        }
+
+        await installFromInput(clipboardUrl);
+    }));
+
+    // Helper function for smart install
+    async function installFromInput(input: string) {
+        const parsed = smartInstaller.parseUrl(input);
+        if (!parsed) {
+            vscode.window.showErrorMessage('Could not parse URL');
+            return;
+        }
+
+        // Ask for scope
+        const scope = await vscode.window.showQuickPick(['Global', 'Project'], {
+            placeHolder: `Install "${parsed.skillName}" to...`
+        });
+        if (!scope) {
+            return;
+        }
+
+        const targetScope = scope.toLowerCase() as 'global' | 'project';
+
+        // Allow user to customize name
+        const customName = await vscode.window.showInputBox({
+            prompt: 'Skill name (press Enter to use default)',
+            value: parsed.skillName,
+            validateInput: (value) => {
+                if (!value.trim()) {
+                    return 'Name cannot be empty';
+                }
+                if (!/^[a-zA-Z0-9_-]+$/.test(value)) {
+                    return 'Name can only contain letters, numbers, hyphens, and underscores';
+                }
+                return null;
+            }
+        });
+
+        if (!customName) {
+            return;
+        }
+
+        // Update parsed name if customized
+        parsed.skillName = customName;
+
+        // Install with progress
+        await vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: `Installing ${parsed.skillName}...`,
+            cancellable: false
+        }, async () => {
+            const result = await smartInstaller.install(parsed, targetScope);
+
+            if (result.success) {
+                vscode.window.showInformationMessage(`Installed ${parsed.skillName} to ${scope}`);
+                skillTreeProvider.refresh();
+
+                // Trigger post-install audit if enabled
+                const autoAudit = vscode.workspace.getConfiguration('claudeCodeAssist')
+                    .get<boolean>('autoAuditOnInstall', true);
+                if (autoAudit && result.destPath) {
+                    triggerPostInstallAudit(result.destPath, parsed.skillName, parsed.skillType);
+                }
+            } else {
+                vscode.window.showErrorMessage(`Install failed: ${result.error}`);
+            }
+        });
+    }
+
+    // Helper function for post-install audit
+    async function triggerPostInstallAudit(destPath: string, itemName: string, itemType: 'skill' | 'agent') {
+        setTimeout(async () => {
+            await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: `Security audit: ${itemName}...`,
+                cancellable: false
+            }, async () => {
+                try {
+                    const result = await securityAuditor.auditPath(destPath, itemName, itemType);
+                    if (result.status === 'danger') {
+                        const action = await vscode.window.showWarningMessage(
+                            `Security issues found in ${itemName}!`,
+                            'View Details', 'Delete'
+                        );
+                        if (action === 'View Details') {
+                            AuditResultPanel.createOrShow(context.extensionUri, [result]);
+                        } else if (action === 'Delete') {
+                            fs.rmSync(destPath, { recursive: true, force: true });
+                            skillTreeProvider.refresh();
+                            vscode.window.showInformationMessage(`Deleted ${itemName} due to security concerns.`);
+                        }
+                    } else if (result.status === 'warning') {
+                        const action = await vscode.window.showWarningMessage(
+                            `Warnings found in ${itemName}.`,
+                            'View Details'
+                        );
+                        if (action === 'View Details') {
+                            AuditResultPanel.createOrShow(context.extensionUri, [result]);
+                        }
+                    } else {
+                        output.appendLine(`${itemName} passed security audit.`);
+                    }
+                } catch (error) {
+                    output.appendLine(`Post-install audit failed: ${error}`);
+                }
+            });
+        }, 500);
+    }
 
     context.subscriptions.push(vscode.commands.registerCommand('claude-code-assist.downloadSkill', async (skill: any) => {
         output.appendLine(`Command: downloadSkill ${skill?.name ?? ''} `);
@@ -246,6 +423,50 @@ export function activate(context: vscode.ExtensionContext) {
 
                             output.appendLine(`Installed to ${destPath}`);
 
+                            // Trigger post-install security audit
+                            const autoAudit = config.get<boolean>('autoAuditOnInstall', true);
+                            if (autoAudit) {
+                                // Schedule audit after download completes
+                                setTimeout(async () => {
+                                    await vscode.window.withProgress({
+                                        location: vscode.ProgressLocation.Notification,
+                                        title: `Security audit: ${skill.name}...`,
+                                        cancellable: false
+                                    }, async () => {
+                                        try {
+                                            const result = await securityAuditor.auditPath(destPath, skill.name, skill.type);
+                                            if (result.status === 'danger') {
+                                                vscode.window.showWarningMessage(
+                                                    `Security issues found in ${skill.name}!`,
+                                                    'View Details', 'Delete'
+                                                ).then(action => {
+                                                    if (action === 'View Details') {
+                                                        AuditResultPanel.createOrShow(context.extensionUri, [result]);
+                                                    } else if (action === 'Delete') {
+                                                        fs.rmSync(destPath, { recursive: true, force: true });
+                                                        skillTreeProvider.refresh();
+                                                        vscode.window.showInformationMessage(`Deleted ${skill.name} due to security concerns.`);
+                                                    }
+                                                });
+                                            } else if (result.status === 'warning') {
+                                                vscode.window.showWarningMessage(
+                                                    `Warnings found in ${skill.name}.`,
+                                                    'View Details'
+                                                ).then(action => {
+                                                    if (action === 'View Details') {
+                                                        AuditResultPanel.createOrShow(context.extensionUri, [result]);
+                                                    }
+                                                });
+                                            } else {
+                                                output.appendLine(`${skill.name} passed security audit.`);
+                                            }
+                                        } catch (error) {
+                                            output.appendLine(`Post-install audit failed: ${error}`);
+                                        }
+                                    });
+                                }, 500);
+                            }
+
                         } finally {
                             // Cleanup
                             try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch (e) { }
@@ -303,6 +524,196 @@ export function activate(context: vscode.ExtensionContext) {
                 }
             }
         }
+    }));
+
+    // Security Audit Commands
+    context.subscriptions.push(vscode.commands.registerCommand('claude-code-assist.auditAll', async () => {
+        output.appendLine('Command: auditAll');
+
+        await vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: 'Security Audit',
+            cancellable: false
+        }, async (progress) => {
+            progress.report({ message: 'Loading items to audit...' });
+
+            const skills = await skillManager.getSkills();
+            const plugins = await pluginManager.getPlugins();
+
+            if (skills.length === 0 && plugins.length === 0) {
+                vscode.window.showInformationMessage('No skills or plugins to audit.');
+                return;
+            }
+
+            const results: AuditResult[] = await securityAuditor.auditAll(
+                skills,
+                plugins,
+                (auditProgress) => {
+                    const percent = Math.round((auditProgress.current / auditProgress.total) * 100);
+                    progress.report({
+                        message: `(${auditProgress.current}/${auditProgress.total}) ${auditProgress.currentItem}`,
+                        increment: 100 / auditProgress.total
+                    });
+                }
+            );
+
+            // Show results in WebView
+            AuditResultPanel.createOrShow(context.extensionUri, results);
+
+            // Show summary notification
+            const dangerCount = results.filter(r => r.status === 'danger').length;
+            const warningCount = results.filter(r => r.status === 'warning').length;
+
+            if (dangerCount > 0) {
+                vscode.window.showWarningMessage(
+                    `Security audit complete: ${dangerCount} dangerous, ${warningCount} warnings found!`,
+                    'View Results'
+                ).then(action => {
+                    if (action === 'View Results') {
+                        AuditResultPanel.createOrShow(context.extensionUri, results);
+                    }
+                });
+            } else if (warningCount > 0) {
+                vscode.window.showWarningMessage(
+                    `Security audit complete: ${warningCount} warnings found.`,
+                    'View Results'
+                ).then(action => {
+                    if (action === 'View Results') {
+                        AuditResultPanel.createOrShow(context.extensionUri, results);
+                    }
+                });
+            } else {
+                vscode.window.showInformationMessage('Security audit complete: All items are safe!');
+            }
+        });
+    }));
+
+    context.subscriptions.push(vscode.commands.registerCommand('claude-code-assist.auditSkill', async (node: SkillTreeItem) => {
+        output.appendLine('Command: auditSkill');
+
+        if (!node.skillItem) {
+            vscode.window.showErrorMessage('No skill selected for audit.');
+            return;
+        }
+
+        await vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: `Auditing ${node.skillItem.name}...`,
+            cancellable: false
+        }, async () => {
+            const result = await securityAuditor.auditSkill(node.skillItem!);
+            AuditResultPanel.createOrShow(context.extensionUri, [result]);
+            showAuditNotification(result);
+        });
+    }));
+
+    context.subscriptions.push(vscode.commands.registerCommand('claude-code-assist.auditPlugin', async (node: SkillTreeItem) => {
+        output.appendLine('Command: auditPlugin');
+
+        if (!node.pluginItem) {
+            vscode.window.showErrorMessage('No plugin selected for audit.');
+            return;
+        }
+
+        await vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: `Auditing plugin ${node.pluginItem.name}...`,
+            cancellable: false
+        }, async () => {
+            const result = await securityAuditor.auditPlugin(node.pluginItem!);
+            AuditResultPanel.createOrShow(context.extensionUri, [result]);
+            showAuditNotification(result);
+        });
+    }));
+
+    // Helper function to show audit notification
+    function showAuditNotification(result: AuditResult) {
+        if (result.status === 'danger') {
+            vscode.window.showWarningMessage(
+                `Security issues found in ${result.itemName}!`,
+                'View Details'
+            ).then(action => {
+                if (action === 'View Details') {
+                    AuditResultPanel.createOrShow(context.extensionUri, [result]);
+                }
+            });
+        } else if (result.status === 'warning') {
+            vscode.window.showWarningMessage(
+                `Warnings found in ${result.itemName}.`,
+                'View Details'
+            ).then(action => {
+                if (action === 'View Details') {
+                    AuditResultPanel.createOrShow(context.extensionUri, [result]);
+                }
+            });
+        } else if (result.status === 'error') {
+            vscode.window.showErrorMessage(`Audit failed for ${result.itemName}: Check output for details.`);
+            securityAuditor.showOutput();
+        } else {
+            vscode.window.showInformationMessage(`${result.itemName} is safe!`);
+        }
+    }
+
+    // Check for updates command
+    context.subscriptions.push(vscode.commands.registerCommand('claude-code-assist.checkUpdates', async () => {
+        output.appendLine('Command: checkUpdates');
+
+        const skills = await skillManager.getSkills();
+        if (skills.length === 0) {
+            vscode.window.showInformationMessage('No skills installed to check for updates.');
+            return;
+        }
+
+        await vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: 'Checking for updates...',
+            cancellable: false
+        }, async (progress) => {
+            const results = await updateChecker.checkAll(skills, (current, total, name) => {
+                progress.report({
+                    message: `(${current}/${total}) ${name}`,
+                    increment: 100 / total
+                });
+            });
+
+            const updatesAvailable = results.filter(r => r.hasUpdate);
+
+            if (updatesAvailable.length > 0) {
+                vscode.window.showInformationMessage(
+                    `${updatesAvailable.length} skill(s) have updates available: ${updatesAvailable.map(u => u.skillName).join(', ')}`,
+                    'View Details'
+                ).then(action => {
+                    if (action === 'View Details') {
+                        output.show();
+                        output.appendLine('--- Update Check Results ---');
+                        for (const result of results) {
+                            if (result.hasUpdate) {
+                                output.appendLine(`  [UPDATE] ${result.skillName}`);
+                            } else if (result.error) {
+                                output.appendLine(`  [ERROR] ${result.skillName}: ${result.error}`);
+                            } else {
+                                output.appendLine(`  [OK] ${result.skillName}`);
+                            }
+                        }
+                    }
+                });
+            } else {
+                vscode.window.showInformationMessage('All skills are up to date!');
+            }
+        });
+    }));
+
+    // Export configuration command
+    context.subscriptions.push(vscode.commands.registerCommand('claude-code-assist.exportConfig', async () => {
+        output.appendLine('Command: exportConfig');
+        await importExport.exportConfig();
+    }));
+
+    // Import configuration command
+    context.subscriptions.push(vscode.commands.registerCommand('claude-code-assist.importConfig', async () => {
+        output.appendLine('Command: importConfig');
+        await importExport.importConfig();
+        skillTreeProvider.refresh();
     }));
 }
 

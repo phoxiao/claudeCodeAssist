@@ -10,14 +10,28 @@
   "categories": [
     "Other"
   ],
+  "icon": "resources/icon.png",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/phoxiao/claudeCodeAssist.git"
+  },
   "activationEvents": [
     "onView:claudeSkills",
     "onCommand:claude-code-assist.refreshSkills",
     "onCommand:claude-code-assist.moveToGlobal",
     "onCommand:claude-code-assist.deleteSkill",
     "onCommand:claude-code-assist.openMarketplace",
+    "onCommand:claude-code-assist.installFromUrl",
+    "onCommand:claude-code-assist.installFromClipboard",
     "onCommand:claude-code-assist.checkConflicts",
-    "onCommand:claude-code-assist.deletePlugin"
+    "onCommand:claude-code-assist.deletePlugin",
+    "onCommand:claude-code-assist.auditAll",
+    "onCommand:claude-code-assist.auditSkill",
+    "onCommand:claude-code-assist.auditPlugin",
+    "onCommand:claude-code-assist.checkUpdates",
+    "onCommand:claude-code-assist.exportConfig",
+    "onCommand:claude-code-assist.importConfig"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -42,6 +56,16 @@
         "icon": "$(cloud-download)"
       },
       {
+        "command": "claude-code-assist.installFromUrl",
+        "title": "Claude: Install Skill from URL",
+        "icon": "$(link)"
+      },
+      {
+        "command": "claude-code-assist.installFromClipboard",
+        "title": "Claude: Install Skill from Clipboard",
+        "icon": "$(clippy)"
+      },
+      {
         "command": "claude-code-assist.checkConflicts",
         "title": "Check Conflicts"
       },
@@ -49,6 +73,36 @@
         "command": "claude-code-assist.deletePlugin",
         "title": "Delete Plugin",
         "icon": "$(trash)"
+      },
+      {
+        "command": "claude-code-assist.auditAll",
+        "title": "Security Audit: All",
+        "icon": "$(shield)"
+      },
+      {
+        "command": "claude-code-assist.auditSkill",
+        "title": "Security Audit",
+        "icon": "$(shield)"
+      },
+      {
+        "command": "claude-code-assist.auditPlugin",
+        "title": "Security Audit",
+        "icon": "$(shield)"
+      },
+      {
+        "command": "claude-code-assist.checkUpdates",
+        "title": "Claude: Check for Updates",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "claude-code-assist.exportConfig",
+        "title": "Claude: Export Configuration",
+        "icon": "$(export)"
+      },
+      {
+        "command": "claude-code-assist.importConfig",
+        "title": "Claude: Import Configuration",
+        "icon": "$(import)"
       }
     ],
     "viewsContainers": {
@@ -71,9 +125,34 @@
     "menus": {
       "view/title": [
         {
+          "command": "claude-code-assist.installFromUrl",
+          "when": "view == claudeSkills",
+          "group": "navigation@1"
+        },
+        {
           "command": "claude-code-assist.openMarketplace",
           "when": "view == claudeSkills",
-          "group": "navigation"
+          "group": "navigation@2"
+        },
+        {
+          "command": "claude-code-assist.auditAll",
+          "when": "view == claudeSkills",
+          "group": "navigation@3"
+        },
+        {
+          "command": "claude-code-assist.checkUpdates",
+          "when": "view == claudeSkills",
+          "group": "navigation@4"
+        },
+        {
+          "command": "claude-code-assist.exportConfig",
+          "when": "view == claudeSkills",
+          "group": "config@1"
+        },
+        {
+          "command": "claude-code-assist.importConfig",
+          "when": "view == claudeSkills",
+          "group": "config@2"
         }
       ],
       "view/item/context": [
@@ -91,6 +170,16 @@
           "command": "claude-code-assist.deletePlugin",
           "when": "view == claudeSkills && viewItem == plugin",
           "group": "inline"
+        },
+        {
+          "command": "claude-code-assist.auditSkill",
+          "when": "view == claudeSkills && viewItem =~ /^(global|project)-.*/",
+          "group": "inline"
+        },
+        {
+          "command": "claude-code-assist.auditPlugin",
+          "when": "view == claudeSkills && viewItem == plugin",
+          "group": "inline"
         }
       ]
     },
@@ -106,6 +195,30 @@
           "type": "string",
           "default": "./.claude",
           "description": "Path to project Claude Code directory (containing skills and agents)"
+        },
+        "claudeCodeAssist.autoAuditOnInstall": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically run security audit after installing a skill or plugin"
+        },
+        "claudeCodeAssist.auditSeverityThreshold": {
+          "type": "string",
+          "enum": ["low", "medium", "high", "critical"],
+          "default": "medium",
+          "description": "Minimum severity level to show in audit warnings"
+        },
+        "claudeCodeAssist.enableClipboardWatcher": {
+          "type": "boolean",
+          "default": true,
+          "description": "Watch clipboard for GitHub URLs and show quick install button in status bar"
+        },
+        "claudeCodeAssist.customSources": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Additional awesome-list URLs to use as skill sources (e.g., https://raw.githubusercontent.com/user/awesome-list/main/README.md)"
         }
       }
     }
