@@ -44,26 +44,10 @@ export class SkillManager {
             }
 
             // 1. Scan top-level skills/ directory
-            const skillFiles = glob.sync('skills/**/*.{md,txt,json}', { cwd: basePath });
-            skillFiles.forEach(f => {
-                skills.push({
-                    name: path.basename(f),
-                    path: path.join(basePath, f),
-                    type: 'skill',
-                    scope: scope
-                });
-            });
+            this.scanTypeDirectory(path.join(basePath, 'skills'), 'skill', scope, skills);
 
             // 2. Scan top-level agents/ directory
-            const agentFiles = glob.sync('agents/**/*.{md,txt,json}', { cwd: basePath });
-            agentFiles.forEach(f => {
-                skills.push({
-                    name: path.basename(f),
-                    path: path.join(basePath, f),
-                    type: 'agent',
-                    scope: scope
-                });
-            });
+            this.scanTypeDirectory(path.join(basePath, 'agents'), 'agent', scope, skills);
 
             // 3. Scan plugins/ directory with proper structure recognition
             const pluginsDir = path.join(basePath, 'plugins');
@@ -72,7 +56,9 @@ export class SkillManager {
             }
 
             // Fallback: if no standard directories exist, scan all files
-            if (skillFiles.length === 0 && agentFiles.length === 0 && !fs.existsSync(pluginsDir)) {
+            const skillsDir = path.join(basePath, 'skills');
+            const agentsDir = path.join(basePath, 'agents');
+            if (!fs.existsSync(skillsDir) && !fs.existsSync(agentsDir) && !fs.existsSync(pluginsDir)) {
                 const allFiles = glob.sync('**/*.{md,txt,json}', { cwd: basePath, ignore: ['**/node_modules/**'] });
                 allFiles.forEach(f => {
                     const type = f.includes('agent') ? 'agent' : 'skill';
@@ -92,6 +78,46 @@ export class SkillManager {
         }
 
         return skills;
+    }
+
+    /**
+     * Scan a skills/ or agents/ directory
+     * - Folders are treated as a single skill/agent unit
+     * - Individual files are treated as standalone skills/agents
+     */
+    private scanTypeDirectory(dirPath: string, type: 'skill' | 'agent', scope: 'global' | 'project', skills: SkillItem[]): void {
+        if (!fs.existsSync(dirPath)) {
+            return;
+        }
+
+        const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+
+        for (const entry of entries) {
+            // Skip hidden files/folders
+            if (entry.name.startsWith('.')) {
+                continue;
+            }
+
+            const entryPath = path.join(dirPath, entry.name);
+
+            if (entry.isDirectory()) {
+                // Directory is treated as a single skill/agent unit
+                skills.push({
+                    name: entry.name,
+                    path: entryPath,
+                    type: type,
+                    scope: scope
+                });
+            } else if (entry.isFile() && /\.(md|txt|json)$/i.test(entry.name)) {
+                // Individual file is a standalone skill/agent
+                skills.push({
+                    name: entry.name,
+                    path: entryPath,
+                    type: type,
+                    scope: scope
+                });
+            }
+        }
     }
 
     private scanPluginsDirectory(pluginsDir: string, scope: 'global' | 'project', skills: SkillItem[]): void {
@@ -201,7 +227,27 @@ export class SkillManager {
 
     public async deleteSkill(item: SkillItem): Promise<void> {
         if (fs.existsSync(item.path)) {
-            fs.unlinkSync(item.path);
+            const stats = fs.statSync(item.path);
+            if (stats.isDirectory()) {
+                // Recursively delete directory
+                this.deleteRecursiveSync(item.path);
+            } else {
+                fs.unlinkSync(item.path);
+            }
+        }
+    }
+
+    private deleteRecursiveSync(dirPath: string): void {
+        if (fs.existsSync(dirPath)) {
+            fs.readdirSync(dirPath).forEach((file) => {
+                const curPath = path.join(dirPath, file);
+                if (fs.statSync(curPath).isDirectory()) {
+                    this.deleteRecursiveSync(curPath);
+                } else {
+                    fs.unlinkSync(curPath);
+                }
+            });
+            fs.rmdirSync(dirPath);
         }
     }
 
