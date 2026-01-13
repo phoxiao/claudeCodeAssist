@@ -8,6 +8,8 @@ import { PluginManager } from './PluginManager';
 import { CommandManager } from './CommandManager';
 import { SkillTreeProvider, SkillTreeItem } from './SkillTreeProvider';
 import { MarketplacePanel } from './MarketplacePanel';
+import { MarketplaceManager } from './MarketplaceManager';
+import { MarketplaceConfigPanel } from './MarketplaceConfigPanel';
 import { SecurityAuditor, AuditResult } from './SecurityAuditor';
 import { AuditResultPanel } from './AuditResultPanel';
 import { SmartInstaller, ParsedUrl } from './SmartInstaller';
@@ -23,6 +25,7 @@ export function activate(context: vscode.ExtensionContext) {
     const skillManager = new SkillManager();
     const pluginManager = new PluginManager();
     const commandManager = new CommandManager();
+    const marketplaceManager = new MarketplaceManager();
     const skillTreeProvider = new SkillTreeProvider(skillManager, pluginManager, commandManager);
     const securityAuditor = new SecurityAuditor(output);
     const smartInstaller = new SmartInstaller(output);
@@ -123,6 +126,11 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(vscode.commands.registerCommand('claude-code-assist.openMarketplace', () => {
         output.appendLine('Command: openMarketplace');
         MarketplacePanel.createOrShow(context.extensionUri);
+    }));
+
+    context.subscriptions.push(vscode.commands.registerCommand('claude-code-assist.openMarketplaceConfig', () => {
+        output.appendLine('Command: openMarketplaceConfig');
+        MarketplaceConfigPanel.createOrShow(context.extensionUri, marketplaceManager);
     }));
 
     // Smart Install: Install from URL command

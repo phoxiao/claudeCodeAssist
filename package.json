@@ -33,7 +33,8 @@
     "onCommand:claude-code-assist.exportConfig",
     "onCommand:claude-code-assist.importConfig",
     "onCommand:claude-code-assist.deleteCommand",
-    "onCommand:claude-code-assist.moveCommandToUser"
+    "onCommand:claude-code-assist.moveCommandToUser",
+    "onCommand:claude-code-assist.openMarketplaceConfig"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -135,6 +136,11 @@
         "command": "claude-code-assist.movePluginToProject",
         "title": "Move to Project",
         "icon": "$(arrow-down)"
+      },
+      {
+        "command": "claude-code-assist.openMarketplaceConfig",
+        "title": "Configure Marketplace Sources",
+        "icon": "$(gear)"
       }
     ],
     "viewsContainers": {
@@ -185,6 +191,11 @@
           "command": "claude-code-assist.importConfig",
           "when": "view == claudeSkills",
           "group": "config@2"
+        },
+        {
+          "command": "claude-code-assist.openMarketplaceConfig",
+          "when": "view == claudeSkills",
+          "group": "navigation@5"
         }
       ],
       "view/item/context": [
