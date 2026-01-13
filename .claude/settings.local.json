@@ -6,7 +6,9 @@
       "Bash(vsce package:*)",
       "Bash(code --install-extension:*)",
       "Bash(code --uninstall-extension:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfix: handle cross-device file moves with EXDEV fallback\n\nAdd moveFileOrDir helper method that falls back to copy+delete when\nfs.renameSync fails with EXDEV error \\(cross-device link not permitted\\).\n\nThis fixes move operations between volumes \\(e.g., external drive to home\\).\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")"
     ]
   }
 }
