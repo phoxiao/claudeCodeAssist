@@ -206,6 +206,56 @@ export class SkillManager {
         });
     }
 
+    public async moveToProject(skill: SkillItem): Promise<void> {
+        if (skill.scope === 'project') { return; }
+
+        const projectRoot = this.getProjectPath();
+        if (!projectRoot) {
+            throw new Error('No workspace folder open');
+        }
+
+        const projectPath = path.join(projectRoot, skill.type === 'skill' ? 'skills' : 'agents');
+        if (!fs.existsSync(projectPath)) {
+            fs.mkdirSync(projectPath, { recursive: true });
+        }
+
+        const baseName = path.basename(skill.path);
+        const finalDestPath = path.join(projectPath, baseName);
+
+        if (fs.existsSync(finalDestPath)) {
+            throw new Error('Skill already exists in project scope');
+        }
+
+        fs.renameSync(skill.path, finalDestPath);
+    }
+
+    public async copyToProject(skill: SkillItem): Promise<void> {
+        if (skill.scope === 'project') { return; }
+
+        const projectRoot = this.getProjectPath();
+        if (!projectRoot) {
+            throw new Error('No workspace folder open');
+        }
+
+        const projectPath = path.join(projectRoot, skill.type === 'skill' ? 'skills' : 'agents');
+        if (!fs.existsSync(projectPath)) {
+            fs.mkdirSync(projectPath, { recursive: true });
+        }
+
+        const baseName = path.basename(skill.path);
+        const finalDestPath = path.join(projectPath, baseName);
+
+        if (fs.existsSync(finalDestPath)) {
+            throw new Error('Skill already exists in project scope');
+        }
+
+        if (fs.statSync(skill.path).isDirectory()) {
+            this.copyRecursiveSync(skill.path, finalDestPath);
+        } else {
+            fs.copyFileSync(skill.path, finalDestPath);
+        }
+    }
+
     public async saveSkill(name: string, content: string, type: 'skill' | 'agent', scope: 'user' | 'project'): Promise<void> {
         let basePath = scope === 'user' ? this.getUserPath() : this.getProjectPath();
         if (!basePath) {

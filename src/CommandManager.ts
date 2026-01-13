@@ -174,6 +174,54 @@ export class CommandManager {
         });
     }
 
+    public async moveToProject(command: CommandItem): Promise<void> {
+        if (command.scope === 'project') { return; }
+
+        const projectCommandsPath = this.getProjectCommandsPath();
+        if (!projectCommandsPath) {
+            throw new Error('No workspace folder open');
+        }
+
+        if (!fs.existsSync(projectCommandsPath)) {
+            fs.mkdirSync(projectCommandsPath, { recursive: true });
+        }
+
+        const baseName = path.basename(command.path);
+        const finalDestPath = path.join(projectCommandsPath, baseName);
+
+        if (fs.existsSync(finalDestPath)) {
+            throw new Error('Command already exists in project scope');
+        }
+
+        fs.renameSync(command.path, finalDestPath);
+    }
+
+    public async copyToProject(command: CommandItem): Promise<void> {
+        if (command.scope === 'project') { return; }
+
+        const projectCommandsPath = this.getProjectCommandsPath();
+        if (!projectCommandsPath) {
+            throw new Error('No workspace folder open');
+        }
+
+        if (!fs.existsSync(projectCommandsPath)) {
+            fs.mkdirSync(projectCommandsPath, { recursive: true });
+        }
+
+        const baseName = path.basename(command.path);
+        const finalDestPath = path.join(projectCommandsPath, baseName);
+
+        if (fs.existsSync(finalDestPath)) {
+            throw new Error('Command already exists in project scope');
+        }
+
+        if (fs.statSync(command.path).isDirectory()) {
+            this.copyRecursiveSync(command.path, finalDestPath);
+        } else {
+            fs.copyFileSync(command.path, finalDestPath);
+        }
+    }
+
     public async saveCommand(name: string, content: string, scope: 'user' | 'project'): Promise<void> {
         let basePath = scope === 'user' ? this.getUserCommandsPath() : this.getProjectCommandsPath();
         if (!basePath) {

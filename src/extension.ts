@@ -97,6 +97,29 @@ export function activate(context: vscode.ExtensionContext) {
         }
     }));
 
+    context.subscriptions.push(vscode.commands.registerCommand('claude-code-assist.moveToProject', async (node: SkillTreeItem) => {
+        output.appendLine('Command: moveToProject');
+        if (node.skillItem && node.scope === 'user') {
+            const action = await vscode.window.showQuickPick(['Copy to Project', 'Move to Project'], { placeHolder: 'Select action' });
+            if (!action) { return; }
+
+            try {
+                if (action === 'Move to Project') {
+                    await skillManager.moveToProject(node.skillItem);
+                    vscode.window.showInformationMessage(`Moved ${node.label} to Project`);
+                    output.appendLine(`Moved ${node.label} to project`);
+                } else {
+                    await skillManager.copyToProject(node.skillItem);
+                    vscode.window.showInformationMessage(`Copied ${node.label} to Project`);
+                    output.appendLine(`Copied ${node.label} to project`);
+                }
+                skillTreeProvider.refresh();
+            } catch (error) {
+                vscode.window.showErrorMessage(`Failed to ${action === 'Move to Project' ? 'move' : 'copy'} skill: ${error}`);
+            }
+        }
+    }));
+
     context.subscriptions.push(vscode.commands.registerCommand('claude-code-assist.openMarketplace', () => {
         output.appendLine('Command: openMarketplace');
         MarketplacePanel.createOrShow(context.extensionUri);
@@ -752,6 +775,78 @@ export function activate(context: vscode.ExtensionContext) {
                 skillTreeProvider.refresh();
             } catch (error) {
                 vscode.window.showErrorMessage(`Failed to ${action === 'Move to User' ? 'move' : 'copy'} command: ${error}`);
+            }
+        }
+    }));
+
+    // Move command to project
+    context.subscriptions.push(vscode.commands.registerCommand('claude-code-assist.moveCommandToProject', async (node: SkillTreeItem) => {
+        output.appendLine('Command: moveCommandToProject');
+        if (node.commandItem && node.scope === 'user') {
+            const action = await vscode.window.showQuickPick(['Copy to Project', 'Move to Project'], { placeHolder: 'Select action' });
+            if (!action) { return; }
+
+            try {
+                if (action === 'Move to Project') {
+                    await commandManager.moveToProject(node.commandItem);
+                    vscode.window.showInformationMessage(`Moved ${node.label} to Project`);
+                    output.appendLine(`Moved command ${node.label} to project`);
+                } else {
+                    await commandManager.copyToProject(node.commandItem);
+                    vscode.window.showInformationMessage(`Copied ${node.label} to Project`);
+                    output.appendLine(`Copied command ${node.label} to project`);
+                }
+                skillTreeProvider.refresh();
+            } catch (error) {
+                vscode.window.showErrorMessage(`Failed to ${action === 'Move to Project' ? 'move' : 'copy'} command: ${error}`);
+            }
+        }
+    }));
+
+    // Move plugin to user
+    context.subscriptions.push(vscode.commands.registerCommand('claude-code-assist.movePluginToUser', async (node: SkillTreeItem) => {
+        output.appendLine('Command: movePluginToUser');
+        if (node.pluginItem && node.scope === 'project') {
+            const action = await vscode.window.showQuickPick(['Copy to User', 'Move to User'], { placeHolder: 'Select action' });
+            if (!action) { return; }
+
+            try {
+                if (action === 'Move to User') {
+                    await pluginManager.moveToUser(node.pluginItem);
+                    vscode.window.showInformationMessage(`Moved ${node.label} to User`);
+                    output.appendLine(`Moved plugin ${node.label} to user`);
+                } else {
+                    await pluginManager.copyToUser(node.pluginItem);
+                    vscode.window.showInformationMessage(`Copied ${node.label} to User`);
+                    output.appendLine(`Copied plugin ${node.label} to user`);
+                }
+                skillTreeProvider.refresh();
+            } catch (error) {
+                vscode.window.showErrorMessage(`Failed to ${action === 'Move to User' ? 'move' : 'copy'} plugin: ${error}`);
+            }
+        }
+    }));
+
+    // Move plugin to project
+    context.subscriptions.push(vscode.commands.registerCommand('claude-code-assist.movePluginToProject', async (node: SkillTreeItem) => {
+        output.appendLine('Command: movePluginToProject');
+        if (node.pluginItem && node.scope === 'user') {
+            const action = await vscode.window.showQuickPick(['Copy to Project', 'Move to Project'], { placeHolder: 'Select action' });
+            if (!action) { return; }
+
+            try {
+                if (action === 'Move to Project') {
+                    await pluginManager.moveToProject(node.pluginItem);
+                    vscode.window.showInformationMessage(`Moved ${node.label} to Project`);
+                    output.appendLine(`Moved plugin ${node.label} to project`);
+                } else {
+                    await pluginManager.copyToProject(node.pluginItem);
+                    vscode.window.showInformationMessage(`Copied ${node.label} to Project`);
+                    output.appendLine(`Copied plugin ${node.label} to project`);
+                }
+                skillTreeProvider.refresh();
+            } catch (error) {
+                vscode.window.showErrorMessage(`Failed to ${action === 'Move to Project' ? 'move' : 'copy'} plugin: ${error}`);
             }
         }
     }));

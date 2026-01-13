@@ -115,6 +115,26 @@
         "command": "claude-code-assist.moveCommandToUser",
         "title": "Move to User",
         "icon": "$(arrow-up)"
+      },
+      {
+        "command": "claude-code-assist.moveToProject",
+        "title": "Move to Project",
+        "icon": "$(arrow-down)"
+      },
+      {
+        "command": "claude-code-assist.moveCommandToProject",
+        "title": "Move to Project",
+        "icon": "$(arrow-down)"
+      },
+      {
+        "command": "claude-code-assist.movePluginToUser",
+        "title": "Move to User",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "claude-code-assist.movePluginToProject",
+        "title": "Move to Project",
+        "icon": "$(arrow-down)"
       }
     ],
     "viewsContainers": {
@@ -189,8 +209,28 @@
           "group": "inline"
         },
         {
+          "command": "claude-code-assist.moveToProject",
+          "when": "view == claudeSkills && viewItem =~ /^user-(skill|agent)/",
+          "group": "inline"
+        },
+        {
+          "command": "claude-code-assist.moveCommandToProject",
+          "when": "view == claudeSkills && viewItem == user-command",
+          "group": "inline"
+        },
+        {
           "command": "claude-code-assist.deletePlugin",
-          "when": "view == claudeSkills && viewItem == plugin",
+          "when": "view == claudeSkills && viewItem =~ /^(user|project)-plugin/",
+          "group": "inline"
+        },
+        {
+          "command": "claude-code-assist.movePluginToUser",
+          "when": "view == claudeSkills && viewItem == project-plugin",
+          "group": "inline"
+        },
+        {
+          "command": "claude-code-assist.movePluginToProject",
+          "when": "view == claudeSkills && viewItem == user-plugin",
           "group": "inline"
         },
         {
@@ -200,7 +240,7 @@
         },
         {
           "command": "claude-code-assist.auditPlugin",
-          "when": "view == claudeSkills && viewItem == plugin",
+          "when": "view == claudeSkills && viewItem =~ /^(user|project)-plugin/",
           "group": "inline"
         }
       ]

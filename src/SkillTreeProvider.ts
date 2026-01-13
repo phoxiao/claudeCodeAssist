@@ -85,7 +85,7 @@ export class SkillTreeProvider implements vscode.TreeDataProvider<SkillTreeItem>
                 return new SkillTreeItem(
                     plugin.name,
                     isExpandable ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None,
-                    'plugin',
+                    `${scope}-plugin`,
                     scope,
                     'plugin',
                     undefined,
@@ -211,7 +211,7 @@ export class SkillTreeItem extends vscode.TreeItem {
         this.tooltip = this.label;
 
         // Handle plugin items
-        if (contextValue === 'plugin' && pluginItem) {
+        if (contextValue.endsWith('-plugin') && pluginItem) {
             this.iconPath = new vscode.ThemeIcon('package');
             const versionDisplay = pluginItem.version.length > 7 ? pluginItem.version.substring(0, 7) : pluginItem.version;
             this.description = `${pluginItem.marketplace} v${versionDisplay}`;

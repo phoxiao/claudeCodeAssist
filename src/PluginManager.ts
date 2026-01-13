@@ -1,3 +1,4 @@
+import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -131,6 +132,126 @@ export class PluginManager {
             const execError = error as { stderr?: string; message?: string };
             const stderr = execError.stderr || execError.message || 'Unknown error';
             throw new Error(`Failed to uninstall plugin: ${stderr}`);
+        }
+    }
+
+    private getProjectPluginsPath(): string | undefined {
+        if (!vscode.workspace.workspaceFolders) {
+            return undefined;
+        }
+        const config = vscode.workspace.getConfiguration('claudeCodeAssist');
+        const projectPathRel = config.get<string>('projectSkillsPath') || './.claude';
+        return path.join(vscode.workspace.workspaceFolders[0].uri.fsPath, projectPathRel, 'plugins');
+    }
+
+    public async moveToUser(plugin: PluginItem): Promise<void> {
+        await this.changePluginScope(plugin, 'user', true);
+    }
+
+    public async copyToUser(plugin: PluginItem): Promise<void> {
+        await this.changePluginScope(plugin, 'user', false);
+    }
+
+    public async moveToProject(plugin: PluginItem): Promise<void> {
+        await this.changePluginScope(plugin, 'project', true);
+    }
+
+    public async copyToProject(plugin: PluginItem): Promise<void> {
+        await this.changePluginScope(plugin, 'project', false);
+    }
+
+    private async changePluginScope(plugin: PluginItem, targetScope: string, deleteSource: boolean): Promise<void> {
+        if (plugin.scope === targetScope) { return; }
+
+        // Calculate destination path
+        let destBasePath: string | undefined;
+        if (targetScope === 'user') {
+            destBasePath = this.getPluginsBasePath();
+        } else {
+            destBasePath = this.getProjectPluginsPath();
+            if (!destBasePath) {
+                throw new Error('No workspace folder open');
+            }
+        }
+
+        // Create cache directory structure: plugins/cache/<marketplace>/<pluginName>/<version>
+        const destPath = path.join(destBasePath, 'cache', plugin.marketplace, plugin.name, plugin.version);
+
+        if (fs.existsSync(destPath)) {
+            throw new Error(`Plugin already exists in ${targetScope} scope`);
+        }
+
+        // Ensure destination directory exists
+        fs.mkdirSync(destPath, { recursive: true });
+
+        // Copy plugin files
+        this.copyRecursiveSync(plugin.installPath, destPath);
+
+        // Update installed_plugins.json
+        const data = this.readInstalledPluginsJson();
+        if (!data) {
+            throw new Error('Failed to read installed_plugins.json');
+        }
+
+        const pluginKey = plugin.id; // format: "pluginName@marketplace"
+        const entries = data.plugins[pluginKey] || [];
+
+        // Find and update/add the entry
+        const sourceEntry = entries.find(e => e.installPath === plugin.installPath);
+
+        if (deleteSource && sourceEntry) {
+            // Move: update existing entry
+            sourceEntry.scope = targetScope;
+            sourceEntry.installPath = destPath;
+
+            // Delete source files
+            this.deleteRecursiveSync(plugin.installPath);
+        } else {
+            // Copy: add new entry
+            const newEntry: InstalledPluginEntry = {
+                scope: targetScope,
+                installPath: destPath,
+                version: plugin.version,
+                installedAt: new Date().toISOString(),
+                lastUpdated: new Date().toISOString(),
+                gitCommitSha: plugin.gitCommitSha
+            };
+            entries.push(newEntry);
+            data.plugins[pluginKey] = entries;
+        }
+
+        this.writeInstalledPluginsJson(data);
+    }
+
+    private copyRecursiveSync(src: string, dest: string): void {
+        if (!fs.existsSync(dest)) {
+            fs.mkdirSync(dest, { recursive: true });
+        }
+
+        fs.readdirSync(src).forEach((childItemName) => {
+            const childItemPath = path.join(src, childItemName);
+            const childItemDestPath = path.join(dest, childItemName);
+            const childStats = fs.statSync(childItemPath);
+
+            if (childStats.isDirectory()) {
+                this.copyRecursiveSync(childItemPath, childItemDestPath);
+            } else {
+                fs.copyFileSync(childItemPath, childItemDestPath);
+            }
+        });
+    }
+
+    private deleteRecursiveSync(dirPath: string): void {
+        if (fs.existsSync(dirPath)) {
+            fs.readdirSync(dirPath).forEach((file) => {
+                const curPath = path.join(dirPath, file);
+                if (fs.statSync(curPath).isDirectory()) {
+                    this.deleteRecursiveSync(curPath);
+                } else {
+                    fs.unlinkSync(curPath);
+                }
+            });
+            fs.rmdirSync(dirPath);
         }
     }
 
