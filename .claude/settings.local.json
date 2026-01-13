@@ -5,7 +5,8 @@
       "Bash(npm run compile:*)",
       "Bash(vsce package:*)",
       "Bash(code --install-extension:*)",
-      "Bash(code --uninstall-extension:*)"
+      "Bash(code --uninstall-extension:*)",
+      "Bash(grep:*)"
     ]
   }
 }

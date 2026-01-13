@@ -188,7 +188,7 @@ export class SmartInstaller {
     /**
      * Install from a parsed URL
      */
-    async install(parsed: ParsedUrl, scope: 'global' | 'project'): Promise<InstallResult> {
+    async install(parsed: ParsedUrl, scope: 'user' | 'project'): Promise<InstallResult> {
         this.output.appendLine(`SmartInstaller: Installing ${parsed.skillName} (${parsed.type}) to ${scope}`);
 
         try {
@@ -359,11 +359,11 @@ export class SmartInstaller {
     /**
      * Get the destination path for a skill
      */
-    private async getDestinationPath(name: string, type: 'skill' | 'agent', scope: 'global' | 'project'): Promise<string> {
+    private async getDestinationPath(name: string, type: 'skill' | 'agent', scope: 'user' | 'project'): Promise<string> {
         const config = vscode.workspace.getConfiguration('claudeCodeAssist');
         let destRoot: string;
 
-        if (scope === 'global') {
+        if (scope === 'user') {
             destRoot = config.get<string>('globalSkillsPath') || path.join(os.homedir(), '.claude');
             if (destRoot.startsWith('~')) {
                 destRoot = path.join(os.homedir(), destRoot.slice(1));

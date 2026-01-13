@@ -15,7 +15,7 @@ interface ExportData {
 interface ExportedSkill {
     name: string;
     type: 'skill' | 'agent';
-    scope: 'global' | 'project';
+    scope: 'user' | 'project' | 'global';  // 'global' kept for backward compatibility
     url?: string;
     path: string;
 }
@@ -166,7 +166,9 @@ export class ImportExport {
                                     if (parsed) {
                                         parsed.skillName = skill.name;
                                         parsed.skillType = skill.type;
-                                        const result = await this.smartInstaller.install(parsed, skill.scope);
+                                        // Map 'global' to 'user' for backward compatibility
+                                        const scope = skill.scope === 'global' ? 'user' : skill.scope as 'user' | 'project';
+                                        const result = await this.smartInstaller.install(parsed, scope);
                                         if (result.success) {
                                             skillsImported++;
                                         } else {

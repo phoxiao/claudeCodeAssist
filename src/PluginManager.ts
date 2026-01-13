@@ -1,6 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 
 export interface InstalledPluginEntry {
     scope: string;
@@ -25,6 +27,7 @@ export interface PluginItem {
     installedAt: Date;
     lastUpdated: Date;
     gitCommitSha?: string;
+    scope: string;
 }
 
 export class PluginManager {
@@ -64,6 +67,7 @@ export class PluginManager {
         }
 
         const plugins: PluginItem[] = [];
+        let needsCleanup = false;
 
         for (const [key, entries] of Object.entries(data.plugins)) {
             // key format: "pluginName@marketplaceName"
@@ -71,7 +75,25 @@ export class PluginManager {
             const name = atIndex > 0 ? key.substring(0, atIndex) : key;
             const marketplace = atIndex > 0 ? key.substring(atIndex + 1) : 'unknown';
 
-            for (const entry of entries) {
+            // Filter out entries where installPath no longer exists
+            const validEntries = entries.filter(entry => {
+                const exists = fs.existsSync(entry.installPath);
+                if (!exists) {
+                    needsCleanup = true;
+                }
+                return exists;
+            });
+
+            // Update data for cleanup
+            if (validEntries.length !== entries.length) {
+                if (validEntries.length === 0) {
+                    delete data.plugins[key];
+                } else {
+                    data.plugins[key] = validEntries;
+                }
+            }
+
+            for (const entry of validEntries) {
                 plugins.push({
                     id: key,
                     name: name,
@@ -80,9 +102,15 @@ export class PluginManager {
                     installPath: entry.installPath,
                     installedAt: new Date(entry.installedAt),
                     lastUpdated: new Date(entry.lastUpdated),
-                    gitCommitSha: entry.gitCommitSha
+                    gitCommitSha: entry.gitCommitSha,
+                    scope: entry.scope
                 });
             }
+        }
+
+        // Auto-cleanup invalid entries from JSON
+        if (needsCleanup) {
+            this.writeInstalledPluginsJson(data);
         }
 
         // Sort by name
@@ -90,54 +118,20 @@ export class PluginManager {
     }
 
     public async deletePlugin(plugin: PluginItem): Promise<void> {
-        // 1. Read current data
-        const data = this.readInstalledPluginsJson();
-        if (!data) {
-            throw new Error('Could not read installed_plugins.json');
-        }
+        // Use claude CLI to uninstall plugin
+        // Command format: claude plugin uninstall <pluginName>@<marketplace> --scope <scope>
+        const pluginIdentifier = plugin.id; // format: "pluginName@marketplace"
+        const scope = plugin.scope || 'user';
 
-        // 2. Remove the entry
-        if (data.plugins[plugin.id]) {
-            data.plugins[plugin.id] = data.plugins[plugin.id].filter(
-                entry => entry.installPath !== plugin.installPath
-            );
-
-            // Remove key if no entries remain
-            if (data.plugins[plugin.id].length === 0) {
-                delete data.plugins[plugin.id];
-            }
-        }
-
-        // 3. Write back
-        this.writeInstalledPluginsJson(data);
-
-        // 4. Delete cache directory
-        if (fs.existsSync(plugin.installPath)) {
-            fs.rmSync(plugin.installPath, { recursive: true, force: true });
-        }
-
-        // 5. Clean up empty parent directories
-        this.cleanupEmptyDirectories(path.dirname(plugin.installPath));
-    }
-
-    private cleanupEmptyDirectories(dirPath: string): void {
-        const pluginsBase = this.getPluginsBasePath();
-        const cacheDir = path.join(pluginsBase, 'cache');
-
-        // Only clean up within cache directory
-        if (!dirPath.startsWith(cacheDir) || dirPath === cacheDir) {
-            return;
-        }
+        const execFileAsync = promisify(execFile);
 
         try {
-            const entries = fs.readdirSync(dirPath);
-            if (entries.length === 0) {
-                fs.rmdirSync(dirPath);
-                // Recursively clean parent
-                this.cleanupEmptyDirectories(path.dirname(dirPath));
-            }
-        } catch (error) {
-            // Ignore errors - directory might not exist or have permissions issues
+            await execFileAsync('claude', ['plugin', 'uninstall', pluginIdentifier, '--scope', scope]);
+        } catch (error: unknown) {
+            const execError = error as { stderr?: string; message?: string };
+            const stderr = execError.stderr || execError.message || 'Unknown error';
+            throw new Error(`Failed to uninstall plugin: ${stderr}`);
         }
     }
+
 }

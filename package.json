@@ -19,7 +19,7 @@
   "activationEvents": [
     "onView:claudeSkills",
     "onCommand:claude-code-assist.refreshSkills",
-    "onCommand:claude-code-assist.moveToGlobal",
+    "onCommand:claude-code-assist.moveToUser",
     "onCommand:claude-code-assist.deleteSkill",
     "onCommand:claude-code-assist.openMarketplace",
     "onCommand:claude-code-assist.installFromUrl",
@@ -31,7 +31,9 @@
     "onCommand:claude-code-assist.auditPlugin",
     "onCommand:claude-code-assist.checkUpdates",
     "onCommand:claude-code-assist.exportConfig",
-    "onCommand:claude-code-assist.importConfig"
+    "onCommand:claude-code-assist.importConfig",
+    "onCommand:claude-code-assist.deleteCommand",
+    "onCommand:claude-code-assist.moveCommandToUser"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -41,8 +43,8 @@
         "title": "Refresh Skills"
       },
       {
-        "command": "claude-code-assist.moveToGlobal",
-        "title": "Move to Global",
+        "command": "claude-code-assist.moveToUser",
+        "title": "Move to User",
         "icon": "$(arrow-up)"
       },
       {
@@ -103,6 +105,16 @@
         "command": "claude-code-assist.importConfig",
         "title": "Claude: Import Configuration",
         "icon": "$(import)"
+      },
+      {
+        "command": "claude-code-assist.deleteCommand",
+        "title": "Delete Command",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "claude-code-assist.moveCommandToUser",
+        "title": "Move to User",
+        "icon": "$(arrow-up)"
       }
     ],
     "viewsContainers": {
@@ -158,12 +170,22 @@
       "view/item/context": [
         {
           "command": "claude-code-assist.deleteSkill",
-          "when": "view == claudeSkills && viewItem =~ /^(global|project)-.*/",
+          "when": "view == claudeSkills && viewItem =~ /^(user|project)-(skill|agent)/",
           "group": "inline"
         },
         {
-          "command": "claude-code-assist.moveToGlobal",
-          "when": "view == claudeSkills && viewItem =~ /project-.*/",
+          "command": "claude-code-assist.moveToUser",
+          "when": "view == claudeSkills && viewItem =~ /^project-(skill|agent)/",
+          "group": "inline"
+        },
+        {
+          "command": "claude-code-assist.deleteCommand",
+          "when": "view == claudeSkills && viewItem =~ /^(user|project)-command/",
+          "group": "inline"
+        },
+        {
+          "command": "claude-code-assist.moveCommandToUser",
+          "when": "view == claudeSkills && viewItem =~ /^project-command/",
           "group": "inline"
         },
         {
@@ -173,7 +195,7 @@
         },
         {
           "command": "claude-code-assist.auditSkill",
-          "when": "view == claudeSkills && viewItem =~ /^(global|project)-.*/",
+          "when": "view == claudeSkills && viewItem =~ /^(user|project)-(skill|agent)/",
           "group": "inline"
         },
         {

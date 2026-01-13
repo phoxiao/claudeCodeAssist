@@ -5,6 +5,7 @@ import * as cp from 'child_process';
 import * as os from 'os';
 import { SkillManager } from './SkillManager';
 import { PluginManager } from './PluginManager';
+import { CommandManager } from './CommandManager';
 import { SkillTreeProvider, SkillTreeItem } from './SkillTreeProvider';
 import { MarketplacePanel } from './MarketplacePanel';
 import { SecurityAuditor, AuditResult } from './SecurityAuditor';
@@ -21,7 +22,8 @@ export function activate(context: vscode.ExtensionContext) {
 
     const skillManager = new SkillManager();
     const pluginManager = new PluginManager();
-    const skillTreeProvider = new SkillTreeProvider(skillManager, pluginManager);
+    const commandManager = new CommandManager();
+    const skillTreeProvider = new SkillTreeProvider(skillManager, pluginManager, commandManager);
     const securityAuditor = new SecurityAuditor(output);
     const smartInstaller = new SmartInstaller(output);
     const clipboardWatcher = new ClipboardWatcher(smartInstaller, output);
@@ -71,26 +73,26 @@ export function activate(context: vscode.ExtensionContext) {
         }
     }));
 
-    context.subscriptions.push(vscode.commands.registerCommand('claude-code-assist.moveToGlobal', async (node: SkillTreeItem) => {
-        output.appendLine('Command: moveToGlobal');
+    context.subscriptions.push(vscode.commands.registerCommand('claude-code-assist.moveToUser', async (node: SkillTreeItem) => {
+        output.appendLine('Command: moveToUser');
         if (node.skillItem && node.scope === 'project') {
             // Ask user if they want to Move or Copy
-            const action = await vscode.window.showQuickPick(['Copy to Global', 'Move to Global'], { placeHolder: 'Select action' });
+            const action = await vscode.window.showQuickPick(['Copy to User', 'Move to User'], { placeHolder: 'Select action' });
             if (!action) { return; }
 
             try {
-                if (action === 'Move to Global') {
-                    await skillManager.moveToGlobal(node.skillItem);
-                    vscode.window.showInformationMessage(`Moved ${node.label} to Global`);
-                    output.appendLine(`Moved ${node.label} to global`);
+                if (action === 'Move to User') {
+                    await skillManager.moveToUser(node.skillItem);
+                    vscode.window.showInformationMessage(`Moved ${node.label} to User`);
+                    output.appendLine(`Moved ${node.label} to user`);
                 } else {
-                    await skillManager.copyToGlobal(node.skillItem);
-                    vscode.window.showInformationMessage(`Copied ${node.label} to Global`);
-                    output.appendLine(`Copied ${node.label} to global`);
+                    await skillManager.copyToUser(node.skillItem);
+                    vscode.window.showInformationMessage(`Copied ${node.label} to User`);
+                    output.appendLine(`Copied ${node.label} to user`);
                 }
                 skillTreeProvider.refresh();
             } catch (error) {
-                vscode.window.showErrorMessage(`Failed to ${action === 'Move to Global' ? 'move' : 'copy'} skill: ${error}`);
+                vscode.window.showErrorMessage(`Failed to ${action === 'Move to User' ? 'move' : 'copy'} skill: ${error}`);
             }
         }
     }));
@@ -148,14 +150,14 @@ export function activate(context: vscode.ExtensionContext) {
         }
 
         // Ask for scope
-        const scope = await vscode.window.showQuickPick(['Global', 'Project'], {
+        const scope = await vscode.window.showQuickPick(['User', 'Project'], {
             placeHolder: `Install "${parsed.skillName}" to...`
         });
         if (!scope) {
             return;
         }
 
-        const targetScope = scope.toLowerCase() as 'global' | 'project';
+        const targetScope = scope.toLowerCase() as 'user' | 'project';
 
         // Allow user to customize name
         const customName = await vscode.window.showInputBox({
@@ -246,10 +248,10 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(vscode.commands.registerCommand('claude-code-assist.downloadSkill', async (skill: any) => {
         output.appendLine(`Command: downloadSkill ${skill?.name ?? ''} `);
         // Ask user for scope
-        const scope = await vscode.window.showQuickPick(['Global', 'Project'], { placeHolder: 'Select scope to download to' });
+        const scope = await vscode.window.showQuickPick(['User', 'Project'], { placeHolder: 'Select scope to download to' });
         if (!scope) { return; }
 
-        const targetScope = scope.toLowerCase() as 'global' | 'project';
+        const targetScope = scope.toLowerCase() as 'user' | 'project';
 
         try {
             // If skill has a URL, fetch content from there
@@ -367,7 +369,7 @@ export function activate(context: vscode.ExtensionContext) {
                             // Determine destination
                             const config = vscode.workspace.getConfiguration('claudeCodeAssist');
                             let destRoot = '';
-                            if (targetScope === 'global') {
+                            if (targetScope === 'user') {
                                 destRoot = config.get<string>('globalSkillsPath') || path.join(os.homedir(), '.claude');
                                 if (destRoot.startsWith('~')) { destRoot = path.join(os.homedir(), destRoot.slice(1)); }
                             } else {
@@ -714,6 +716,44 @@ export function activate(context: vscode.ExtensionContext) {
         output.appendLine('Command: importConfig');
         await importExport.importConfig();
         skillTreeProvider.refresh();
+    }));
+
+    // Delete command
+    context.subscriptions.push(vscode.commands.registerCommand('claude-code-assist.deleteCommand', async (node: SkillTreeItem) => {
+        output.appendLine('Command: deleteCommand');
+        if (node.commandItem) {
+            const answer = await vscode.window.showWarningMessage(`Are you sure you want to delete ${node.label}?`, 'Yes', 'No');
+            if (answer === 'Yes') {
+                await commandManager.deleteCommand(node.commandItem);
+                skillTreeProvider.refresh();
+                output.appendLine(`Deleted command ${node.label}`);
+            }
+        }
+    }));
+
+    // Move command to user
+    context.subscriptions.push(vscode.commands.registerCommand('claude-code-assist.moveCommandToUser', async (node: SkillTreeItem) => {
+        output.appendLine('Command: moveCommandToUser');
+        if (node.commandItem && node.scope === 'project') {
+            // Ask user if they want to Move or Copy
+            const action = await vscode.window.showQuickPick(['Copy to User', 'Move to User'], { placeHolder: 'Select action' });
+            if (!action) { return; }
+
+            try {
+                if (action === 'Move to User') {
+                    await commandManager.moveToUser(node.commandItem);
+                    vscode.window.showInformationMessage(`Moved ${node.label} to User`);
+                    output.appendLine(`Moved command ${node.label} to user`);
+                } else {
+                    await commandManager.copyToUser(node.commandItem);
+                    vscode.window.showInformationMessage(`Copied ${node.label} to User`);
+                    output.appendLine(`Copied command ${node.label} to user`);
+                }
+                skillTreeProvider.refresh();
+            } catch (error) {
+                vscode.window.showErrorMessage(`Failed to ${action === 'Move to User' ? 'move' : 'copy'} command: ${error}`);
+            }
+        }
     }));
 }
 
