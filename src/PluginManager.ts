@@ -255,4 +255,24 @@ export class PluginManager {
         }
     }
 
+    private moveFileOrDir(src: string, dest: string): void {
+        try {
+            fs.renameSync(src, dest);
+        } catch (err: unknown) {
+            const error = err as NodeJS.ErrnoException;
+            if (error.code === 'EXDEV') {
+                // Cross-device move: copy then delete
+                if (fs.statSync(src).isDirectory()) {
+                    this.copyRecursiveSync(src, dest);
+                    this.deleteRecursiveSync(src);
+                } else {
+                    fs.copyFileSync(src, dest);
+                    fs.unlinkSync(src);
+                }
+            } else {
+                throw err;
+            }
+        }
+    }
+
 }

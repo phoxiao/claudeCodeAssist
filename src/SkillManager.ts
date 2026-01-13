@@ -135,6 +135,26 @@ export class SkillManager {
         }
     }
 
+    private moveFileOrDir(src: string, dest: string): void {
+        try {
+            fs.renameSync(src, dest);
+        } catch (err: unknown) {
+            const error = err as NodeJS.ErrnoException;
+            if (error.code === 'EXDEV') {
+                // Cross-device move: copy then delete
+                if (fs.statSync(src).isDirectory()) {
+                    this.copyRecursiveSync(src, dest);
+                    this.deleteRecursiveSync(src);
+                } else {
+                    fs.copyFileSync(src, dest);
+                    fs.unlinkSync(src);
+                }
+            } else {
+                throw err;
+            }
+        }
+    }
+
     public async moveToUser(skill: SkillItem): Promise<void> {
         if (skill.scope === 'user') { return; }
 
@@ -152,7 +172,7 @@ export class SkillManager {
             throw new Error('Skill already exists in user scope');
         }
 
-        fs.renameSync(skill.path, finalDestPath);
+        this.moveFileOrDir(skill.path, finalDestPath);
     }
 
     async copyToUser(skill: SkillItem): Promise<void> {
@@ -226,7 +246,7 @@ export class SkillManager {
             throw new Error('Skill already exists in project scope');
         }
 
-        fs.renameSync(skill.path, finalDestPath);
+        this.moveFileOrDir(skill.path, finalDestPath);
     }
 
     public async copyToProject(skill: SkillItem): Promise<void> {
