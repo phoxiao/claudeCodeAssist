@@ -418,11 +418,33 @@ export class AuditResultPanel {
     }
 
     private _renderResult(result: AuditResult): string {
-        const issuesHtml = result.issues.length > 0
-            ? result.issues.map(issue => this._renderIssue(issue, result.itemPath)).join('')
-            : '<div class="no-issues">No security issues detected</div>';
+        let issuesHtml: string;
 
-        const hasIssues = result.issues.length > 0;
+        if (result.issues.length > 0) {
+            issuesHtml = result.issues.map(issue => this._renderIssue(issue, result.itemPath)).join('');
+        } else if (result.status !== 'safe') {
+            // status 是 warning/danger/error 但没有具体 issues 时，显示通用提示
+            const severity = result.status === 'danger' ? 'high' : 'medium';
+            issuesHtml = `
+                <div class="issue-item ${severity}">
+                    <div class="issue-header">
+                        <span class="severity-badge ${severity}">${severity}</span>
+                        <span class="issue-type">review_required</span>
+                    </div>
+                    <div class="issue-description">
+                        Security concerns detected but details not available. Manual review recommended.
+                    </div>
+                    <div class="issue-suggestion">
+                        Check the raw audit response or re-run the audit for more details.
+                    </div>
+                </div>
+            `;
+        } else {
+            issuesHtml = '<div class="no-issues">No security issues detected</div>';
+        }
+
+        // 当有具体 issues 或 status 非 safe 时都认为有问题需要显示
+        const hasIssues = result.issues.length > 0 || result.status !== 'safe';
         const expandedClass = result.status !== 'safe' ? 'expanded' : '';
 
         return `
@@ -434,7 +456,7 @@ export class AuditResultPanel {
                         <div class="result-type">${result.itemType}</div>
                         <div class="result-path">${this._escapeHtml(result.itemPath)}</div>
                     </div>
-                    ${hasIssues ? `<span class="issue-count">${result.issues.length} issue${result.issues.length !== 1 ? 's' : ''}</span>` : ''}
+                    ${hasIssues ? `<span class="issue-count">${result.issues.length || 1} issue${(result.issues.length || 1) !== 1 ? 's' : ''}</span>` : ''}
                     <span class="expand-icon">▶</span>
                 </div>
                 <div class="result-details">
