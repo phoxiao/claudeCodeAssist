@@ -8,7 +8,8 @@
       "Bash(code --uninstall-extension:*)",
       "Bash(grep:*)",
       "Bash(git add:*)",
-      "Bash(git commit -m \"$\\(cat <<''EOF''\nfix: handle cross-device file moves with EXDEV fallback\n\nAdd moveFileOrDir helper method that falls back to copy+delete when\nfs.renameSync fails with EXDEV error \\(cross-device link not permitted\\).\n\nThis fixes move operations between volumes \\(e.g., external drive to home\\).\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")"
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfix: handle cross-device file moves with EXDEV fallback\n\nAdd moveFileOrDir helper method that falls back to copy+delete when\nfs.renameSync fails with EXDEV error \\(cross-device link not permitted\\).\n\nThis fixes move operations between volumes \\(e.g., external drive to home\\).\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfeat: 增强安装类型检测，支持skills、agents、commands和plugins\n\n实现内容分析驱动的智能类型检测系统：\n\n主要改进：\n- 扩展类型支持：从2种（skill/agent）扩展到4种（skill/agent/command/plugin）\n- 内容分析检测：下载后分析实际目录结构，而非仅依赖URL猜测\n- 自动插件识别：包含2种以上类型的内容自动识别为plugin\n- 智能路由：根据实际类型自动安装到对应目录\n\n技术实现：\n- SmartInstaller: 新增detectTypeFromContent\\(\\)和hasContentType\\(\\)方法\n- 两阶段检测：URL提示 → 内容分析（权威）\n- 自动纠错：类型不匹配时自动移动到正确目录\n- 类型映射：skill→skills/, agent→agents/, command→commands/, plugin→plugins/\n\n更新文件：\n- src/SmartInstaller.ts: 核心检测和安装逻辑\n- src/extension.ts: 安装后审计集成\n- src/SecurityAuditor.ts: 审计类型定义扩展\n\n向后兼容：保持默认行为（skill），现有安装不受影响\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\nEOF\n\\)\")"
     ]
   }
 }
