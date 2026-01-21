@@ -15,7 +15,7 @@ export interface ParsedUrl {
     owner?: string;
     repo?: string;
     skillName: string;
-    skillType: 'skill' | 'agent';
+    skillType: 'skill' | 'agent' | 'command' | 'plugin';
 }
 
 export interface InstallResult {
@@ -192,24 +192,71 @@ export class SmartInstaller {
         this.output.appendLine(`SmartInstaller: Installing ${parsed.skillName} (${parsed.type}) to ${scope}`);
 
         try {
-            const destPath = await this.getDestinationPath(parsed.skillName, parsed.skillType, scope);
+            // Use initial type hint for temporary installation
+            const tempDestPath = await this.getDestinationPath(parsed.skillName, parsed.skillType, scope);
 
-            if (fs.existsSync(destPath)) {
+            if (fs.existsSync(tempDestPath)) {
                 return { success: false, error: `${parsed.skillName} already exists in ${scope}` };
             }
 
+            // Perform installation to temp location
+            let installResult: InstallResult;
             switch (parsed.type) {
                 case 'file':
                 case 'raw':
-                    return await this.installFile(parsed, destPath);
+                    installResult = await this.installFile(parsed, tempDestPath);
+                    break;
                 case 'folder':
                 case 'repo':
-                    return await this.installFolder(parsed, destPath);
+                    installResult = await this.installFolder(parsed, tempDestPath);
+                    break;
                 case 'gist':
-                    return await this.installGist(parsed, destPath);
+                    installResult = await this.installGist(parsed, tempDestPath);
+                    break;
                 default:
                     return { success: false, error: `Unknown type: ${parsed.type}` };
             }
+
+            if (!installResult.success) {
+                return installResult;
+            }
+
+            // Detect actual type from downloaded content
+            const installedPath = installResult.destPath!;
+            const isDirectory = fs.statSync(installedPath).isDirectory();
+            const actualType = await this.detectTypeFromContent(installedPath, isDirectory);
+
+            // If type changed, move to correct directory
+            if (actualType !== parsed.skillType) {
+                this.output.appendLine(`SmartInstaller: Content analysis detected type as '${actualType}' (was '${parsed.skillType}')`);
+
+                const correctDestPath = await this.getDestinationPath(parsed.skillName, actualType, scope);
+
+                // Check if target already exists
+                if (fs.existsSync(correctDestPath)) {
+                    // Cleanup the temp installation
+                    if (isDirectory) {
+                        fs.rmSync(installedPath, { recursive: true, force: true });
+                    } else {
+                        fs.unlinkSync(installedPath);
+                    }
+                    return { success: false, error: `${parsed.skillName} already exists in ${scope} as ${actualType}` };
+                }
+
+                // Move to correct location
+                const parentDir = path.dirname(correctDestPath);
+                if (!fs.existsSync(parentDir)) {
+                    fs.mkdirSync(parentDir, { recursive: true });
+                }
+
+                fs.renameSync(installedPath, correctDestPath);
+                this.output.appendLine(`SmartInstaller: Moved to correct directory: ${correctDestPath}`);
+
+                return { success: true, destPath: correctDestPath };
+            }
+
+            return installResult;
+
         } catch (error: any) {
             this.output.appendLine(`SmartInstaller: Install failed: ${error.message}`);
             return { success: false, error: error.message };
@@ -357,9 +404,9 @@ export class SmartInstaller {
     }
 
     /**
-     * Get the destination path for a skill
+     * Get the destination path for a skill, agent, command, or plugin
      */
-    private async getDestinationPath(name: string, type: 'skill' | 'agent', scope: 'user' | 'project'): Promise<string> {
+    private async getDestinationPath(name: string, type: 'skill' | 'agent' | 'command' | 'plugin', scope: 'user' | 'project'): Promise<string> {
         const config = vscode.workspace.getConfiguration('claudeCodeAssist');
         let destRoot: string;
 
@@ -376,7 +423,15 @@ export class SmartInstaller {
             destRoot = path.join(vscode.workspace.workspaceFolders[0].uri.fsPath, projectPathRel);
         }
 
-        const container = type === 'skill' ? 'skills' : 'agents';
+        // Expanded mapping for all 4 types
+        const containerMap: Record<typeof type, string> = {
+            'skill': 'skills',
+            'agent': 'agents',
+            'command': 'commands',
+            'plugin': 'plugins'
+        };
+
+        const container = containerMap[type];
         return path.join(destRoot, container, name);
     }
 
@@ -476,13 +531,88 @@ export class SmartInstaller {
     }
 
     /**
-     * Detect skill type from path
+     * Initial type detection from URL path (hint only)
+     * Final type will be determined by detectTypeFromContent after download
      */
-    private detectSkillType(filePath: string): 'skill' | 'agent' {
+    private detectSkillType(filePath: string): 'skill' | 'agent' | 'command' | 'plugin' {
         const lower = filePath.toLowerCase();
-        if (lower.includes('agent') || lower.endsWith('agent.md')) {
-            return 'agent';
+
+        // Simple keyword detection for initial hint
+        if (lower.includes('plugin')) return 'plugin';
+        if (lower.includes('agent') || lower.includes('subagent')) return 'agent';
+        if (lower.includes('command')) return 'command';
+
+        return 'skill'; // Default
+    }
+
+    /**
+     * Check if directory contains specific content type
+     */
+    private hasContentType(dirPath: string, type: 'skill' | 'agent' | 'command'): boolean {
+        if (!fs.existsSync(dirPath)) return false;
+
+        const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+
+        for (const entry of entries) {
+            const lower = entry.name.toLowerCase();
+
+            switch (type) {
+                case 'skill':
+                    // Look for skills/ directory or SKILL.md files
+                    if (entry.isDirectory() && lower === 'skills') return true;
+                    if (entry.isFile() && (lower === 'skill.md' || lower.includes('skill'))) return true;
+                    break;
+
+                case 'agent':
+                    // Look for agents/ or subagent/ directories, or agent.md files
+                    if (entry.isDirectory() && (lower === 'agents' || lower === 'subagent' || lower === 'subagents')) return true;
+                    if (entry.isFile() && (lower === 'agent.md' || lower.includes('agent') || lower.includes('subagent'))) return true;
+                    break;
+
+                case 'command':
+                    // Look for commands/ directory or command.md files
+                    if (entry.isDirectory() && lower === 'commands') return true;
+                    if (entry.isFile() && (lower === 'command.md' || lower.includes('command'))) return true;
+                    break;
+            }
         }
+
+        return false;
+    }
+
+    /**
+     * Detect type from actual directory/file content
+     * This is the authoritative detection method used after download
+     */
+    private async detectTypeFromContent(contentPath: string, isDirectory: boolean): Promise<'skill' | 'agent' | 'command' | 'plugin'> {
+        if (!isDirectory) {
+            // Single file - use filename as hint
+            const filename = path.basename(contentPath.toLowerCase());
+            if (filename.includes('agent') || filename.includes('subagent')) return 'agent';
+            if (filename.includes('command')) return 'command';
+            if (filename.includes('plugin')) return 'plugin';
+            return 'skill';
+        }
+
+        // Directory - analyze structure
+        const hasSkills = this.hasContentType(contentPath, 'skill');
+        const hasCommands = this.hasContentType(contentPath, 'command');
+        const hasAgents = this.hasContentType(contentPath, 'agent');
+
+        // Count how many types are present
+        const typeCount = [hasSkills, hasCommands, hasAgents].filter(Boolean).length;
+
+        // Multiple types = plugin
+        if (typeCount >= 2) {
+            return 'plugin';
+        }
+
+        // Single type
+        if (hasAgents) return 'agent';
+        if (hasCommands) return 'command';
+        if (hasSkills) return 'skill';
+
+        // Default fallback
         return 'skill';
     }
 

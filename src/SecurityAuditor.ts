@@ -78,7 +78,7 @@ export interface SecurityIssue {
 export interface AuditResult {
     itemName: string;
     itemPath: string;
-    itemType: 'skill' | 'agent' | 'plugin';
+    itemType: 'skill' | 'agent' | 'command' | 'plugin';
     status: 'safe' | 'warning' | 'danger' | 'error';
     issues: SecurityIssue[];
     auditedAt: Date;
@@ -159,7 +159,7 @@ export class SecurityAuditor {
     /**
      * Audit a path directly (for post-installation audit)
      */
-    public async auditPath(targetPath: string, name: string, type: 'skill' | 'agent' | 'plugin'): Promise<AuditResult> {
+    public async auditPath(targetPath: string, name: string, type: 'skill' | 'agent' | 'command' | 'plugin'): Promise<AuditResult> {
         this.outputChannel.appendLine(`\n=== Auditing ${type}: ${name} ===`);
         this.outputChannel.appendLine(`Path: ${targetPath}`);
 
@@ -245,7 +245,7 @@ export class SecurityAuditor {
     private async runClaudeCodeAudit(
         targetPath: string,
         itemName: string,
-        itemType: 'skill' | 'agent' | 'plugin'
+        itemType: 'skill' | 'agent' | 'command' | 'plugin'
     ): Promise<AuditResult> {
         // Check if target exists
         if (!fs.existsSync(targetPath)) {
@@ -400,7 +400,7 @@ IMPORTANT: Only output the JSON object, nothing else.`;
         response: string,
         itemName: string,
         itemPath: string,
-        itemType: 'skill' | 'agent' | 'plugin'
+        itemType: 'skill' | 'agent' | 'command' | 'plugin'
     ): AuditResult {
         try {
             // Try to extract JSON from response

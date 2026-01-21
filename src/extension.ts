@@ -237,7 +237,7 @@ export function activate(context: vscode.ExtensionContext) {
     }
 
     // Helper function for post-install audit
-    async function triggerPostInstallAudit(destPath: string, itemName: string, itemType: 'skill' | 'agent') {
+    async function triggerPostInstallAudit(destPath: string, itemName: string, itemType: 'skill' | 'agent' | 'command' | 'plugin') {
         setTimeout(async () => {
             await vscode.window.withProgress({
                 location: vscode.ProgressLocation.Notification,
